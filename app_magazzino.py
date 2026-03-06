@@ -12,20 +12,27 @@ st.set_page_config(page_title="Gestione Magazzino Pro", layout="wide")
 BUCKET_FOTO = "foto-prodotti" 
 
 # ==========================================
-# 1. SISTEMA DI ACCESSO (LOGIN)
+# 1. SISTEMA DI ACCESSO (LOGIN MULTI-UTENTE)
 # ==========================================
 if 'autenticato' not in st.session_state:
     st.session_state.autenticato = False
+    st.session_state.utente_loggato = ""
 
 if not st.session_state.autenticato:
     st.title("🔐 Accesso Magazzino")
-    password = st.text_input("Inserisci la password per accedere:", type="password")
+    st.info("Area riservata. Inserisci le tue credenziali.")
+    
+    utente_inserito = st.text_input("Nome Utente:")
+    password_inserita = st.text_input("Password:", type="password")
+    
     if st.button("Entra"):
-        if password == st.secrets["PASSWORD_APP"]:
+        # Controlliamo se l'utente esiste nel cassetto [utenti] e se la password è giusta
+        if utente_inserito in st.secrets["utenti"] and st.secrets["utenti"][utente_inserito] == password_inserita:
             st.session_state.autenticato = True
+            st.session_state.utente_loggato = utente_inserito
             st.rerun()
         else:
-            st.error("Password errata. Riprova.")
+            st.error("Nome utente o password errati. Riprova.")
     st.stop()
 
 # ==========================================
@@ -260,6 +267,7 @@ try:
 except Exception as errore:
 
     st.error(f"Errore tecnico: Assicurati che la tabella '{NOME_TABELLA}' sia creata correttamente su Supabase. Dettagli: {errore}")
+
 
 
 
