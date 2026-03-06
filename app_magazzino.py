@@ -21,7 +21,7 @@ if not st.session_state.autenticato:
     st.title("🔐 Accesso Magazzino")
     password = st.text_input("Inserisci la password per accedere:", type="password")
     if st.button("Entra"):
-        if password == "1234":
+        if password == st.secrets["PASSWORD_APP"]:
             st.session_state.autenticato = True
             st.rerun()
         else:
@@ -260,6 +260,7 @@ try:
 except Exception as errore:
 
     st.error(f"Errore tecnico: Assicurati che la tabella '{NOME_TABELLA}' sia creata correttamente su Supabase. Dettagli: {errore}")
+
 
 
 
