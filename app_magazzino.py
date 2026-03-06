@@ -125,10 +125,10 @@ try:
             dati_filtrati = dati
 
         col_tab, col_btn = st.columns([0.8, 0.2])
-       with col_tab:
+      with col_tab:
             st.dataframe(
                 dati_filtrati, 
-                column_order=("Articolo", "Descrizione", "Um", "Quantità", "immagine"), # 👈 ECCO LA RIGA MAGICA!
+                column_order=("Articolo", "Descrizione", "Um", "Quantità", "immagine"),
                 column_config={
                     "immagine": st.column_config.ImageColumn("Foto"),
                     "created_at": None, 
@@ -260,4 +260,5 @@ try:
 except Exception as errore:
 
     st.error(f"Errore tecnico: Assicurati che la tabella '{NOME_TABELLA}' sia creata correttamente su Supabase. Dettagli: {errore}")
+
 
