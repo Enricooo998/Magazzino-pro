@@ -9,7 +9,7 @@ CHIAVE_SUPABASE = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL_SUPABASE, CHIAVE_SUPABASE)
 st.set_page_config(page_title="Gestione Magazzino Pro", layout="wide")
 
-BUCKET_FOTO = "foto-prodotti" 
+BUCKET_FOTO = "foto-prodotti"
 
 # ==========================================
 # 1. SISTEMA DI ACCESSO (LOGIN MULTI-UTENTE)
@@ -191,7 +191,19 @@ try:
             c1, c2 = st.columns(2)
             
             if c1.button("➕ CARICO", use_container_width=True):
+                # 1. Aggiorna quantità
                 supabase.table(NOME_TABELLA).update({"Quantità": qta_attuale + quantita_mov}).eq("Articolo", art_nome).execute()
+                
+                # 2. Registra nello storico
+                dati_storico = {
+                    "Utente": st.session_state.utente_loggato,
+                    "Catalogo": NOME_TABELLA,
+                    "Articolo": art_nome,
+                    "Operazione": "CARICO",
+                    "Quantita": quantita_mov
+                }
+                supabase.table("Storico").insert(dati_storico).execute()
+                
                 st.session_state.ultimo_articolo = art_nome
                 st.session_state.dati_annulla = {"articolo": art_nome, "quantita_precedente": qta_attuale}
                 st.session_state.messaggio_successo = f"✅ Aggiunti {quantita_mov} a {art_nome}."
@@ -199,7 +211,19 @@ try:
                 
             if c2.button("➖ SCARICO", use_container_width=True):
                 if qta_attuale >= quantita_mov:
+                    # 1. Aggiorna quantità
                     supabase.table(NOME_TABELLA).update({"Quantità": qta_attuale - quantita_mov}).eq("Articolo", art_nome).execute()
+                    
+                    # 2. Registra nello storico
+                    dati_storico = {
+                        "Utente": st.session_state.utente_loggato,
+                        "Catalogo": NOME_TABELLA,
+                        "Articolo": art_nome,
+                        "Operazione": "SCARICO",
+                        "Quantita": quantita_mov
+                    }
+                    supabase.table("Storico").insert(dati_storico).execute()
+                    
                     st.session_state.ultimo_articolo = art_nome
                     st.session_state.dati_annulla = {"articolo": art_nome, "quantita_precedente": qta_attuale}
                     st.session_state.messaggio_successo = f"✅ Tolti {quantita_mov} da {art_nome}."
@@ -265,9 +289,31 @@ try:
         st.info(f"Il catalogo '{NOME_TABELLA}' è vuoto. Aggiungi un articolo dalla barra laterale.")
 
 except Exception as errore:
-
     st.error(f"Errore tecnico: Assicurati che la tabella '{NOME_TABELLA}' sia creata correttamente su Supabase. Dettagli: {errore}")
 
+# ==========================================
+# 5. SEZIONE STORICO MOVIMENTI
+# ==========================================
+st.divider()
+st.subheader("⏱️ Ultimi Movimenti in Magazzino")
+
+try:
+    risposta_storico = supabase.table("Storico").select("*").order("created_at", desc=True).limit(50).execute()
+    
+    if risposta_storico.data:
+        st.dataframe(
+            risposta_storico.data,
+            column_order=("created_at", "Utente", "Catalogo", "Articolo", "Operazione", "Quantita"),
+            column_config={
+                "created_at": st.column_config.DatetimeColumn("Data e Ora", format="DD/MM/YYYY - HH:mm"),
+                "id": None
+            },
+            use_container_width=True
+        )
+    else:
+        st.info("Nessun movimento registrato finora.")
+except Exception as e:
+    st.error(f"Impossibile caricare lo storico. Assicurati di aver creato la tabella 'Storico' su Supabase. Errore: {e}")
 
 
 
