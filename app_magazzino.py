@@ -4,9 +4,8 @@ import io
 import csv
 
 # --- CONFIGURAZIONE DATABASE ---
-URL_SUPABASE = st.secrets["https://lqkebbwhbdkndehaeweh.supabase.co"]
-CHIAVE_SUPABASE = st.secrets["sb_publishable_lGnO77sxP9AEn_KJgGStQw_OFge-Wp6"]
-
+URL_SUPABASE = st.secrets["SUPABASE_URL"]
+CHIAVE_SUPABASE = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL_SUPABASE, CHIAVE_SUPABASE)
 st.set_page_config(page_title="Gestione Magazzino Pro", layout="wide")
 
@@ -258,4 +257,5 @@ try:
         st.info(f"Il catalogo '{NOME_TABELLA}' è vuoto. Aggiungi un articolo dalla barra laterale.")
 
 except Exception as errore:
+
     st.error(f"Errore tecnico: Assicurati che la tabella '{NOME_TABELLA}' sia creata correttamente su Supabase. Dettagli: {errore}")
