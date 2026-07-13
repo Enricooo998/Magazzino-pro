@@ -4,6 +4,12 @@ import io
 import csv
 import traceback
 import pandas as pd
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
  
 # --- CONFIGURAZIONE DATABASE ---
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
@@ -257,7 +263,75 @@ def movimenta_quantita_atomica(nome_tabella, articolo_id, delta):
         return nuova_qta
  
  
-if 'ultimo_articolo' not in st.session_state:
+def genera_pdf_report(titolo, sottotitolo, righe, includi_soglia=True):
+    """Genera un report PDF (tabella articoli) e restituisce un buffer in memoria pronto per il download."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm,
+                             leftMargin=1.5 * cm, rightMargin=1.5 * cm)
+    stili = getSampleStyleSheet()
+    stile_titolo = ParagraphStyle(
+        "TitoloReport", parent=stili["Title"],
+        textColor=colors.HexColor("#3A2E22"), fontName="Helvetica-Bold", fontSize=16,
+    )
+    stile_sotto = ParagraphStyle(
+        "SottoReport", parent=stili["Normal"],
+        textColor=colors.HexColor("#6E4B34"), fontSize=9,
+    )
+ 
+    elementi = [
+        Paragraph(titolo, stile_titolo),
+        Paragraph(sottotitolo, stile_sotto),
+        Spacer(1, 14),
+    ]
+ 
+    intestazione = ["Articolo", "Descrizione", "Um", "Quantità"]
+    if includi_soglia:
+        intestazione.append("Soglia sottoscorta")
+    dati_tabella = [intestazione]
+ 
+    for r in righe:
+        try:
+            qta_fmt = f"{float(r.get('Quantità', 0)):g}"
+        except (ValueError, TypeError):
+            qta_fmt = str(r.get("Quantità", ""))
+        riga = [
+            str(r.get("Articolo", "")),
+            str(r.get("Descrizione", "") or ""),
+            str(r.get("Um", "") or ""),
+            qta_fmt,
+        ]
+        if includi_soglia:
+            try:
+                soglia_fmt = f"{float(r.get('soglia_minima', SOGLIA_SOTTOSCORTA)):g}"
+            except (ValueError, TypeError):
+                soglia_fmt = str(SOGLIA_SOTTOSCORTA)
+            riga.append(soglia_fmt)
+        dati_tabella.append(riga)
+ 
+    if len(dati_tabella) == 1:
+        dati_tabella.append(["Nessun articolo", "", "", ""] + ([""] if includi_soglia else []))
+ 
+    tabella = Table(dati_tabella, repeatRows=1)
+    tabella.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8C6A4E")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#F4EEE1")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#F4EEE1"), colors.HexColor("#E8DFCE")]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B9A688")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elementi.append(tabella)
+ 
+    doc.build(elementi)
+    buffer.seek(0)
+    return buffer
+ 
+ 
+ 
     st.session_state.ultimo_articolo = None
 if 'messaggio_successo' not in st.session_state:
     st.session_state.messaggio_successo = None
@@ -520,6 +594,86 @@ try:
                 mime="text/csv",
                 use_container_width=True
             )
+ 
+        st.markdown("---")
+ 
+        with st.expander("📄 Genera Report PDF"):
+            tipo_report = st.radio(
+                "Tipo di report:",
+                [
+                    "Catalogo corrente completo",
+                    "Solo sottoscorta (catalogo corrente)",
+                    "Solo sottoscorta (tutti i cataloghi)",
+                    "Selezione personalizzata articoli",
+                ],
+                key="tipo_report_pdf",
+            )
+ 
+            righe_report = []
+            titolo_report = ""
+            sottotitolo_report = f"Generato da {st.session_state.utente_loggato} il {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+ 
+            if tipo_report == "Catalogo corrente completo":
+                righe_report = dati
+                titolo_report = f"Report Magazzino — {NOME_TABELLA}"
+ 
+            elif tipo_report == "Solo sottoscorta (catalogo corrente)":
+                righe_report = sottoscorta
+                titolo_report = f"Report Sottoscorta — {NOME_TABELLA}"
+ 
+            elif tipo_report == "Solo sottoscorta (tutti i cataloghi)":
+                for catalogo in lista_cataloghi:
+                    try:
+                        righe_cat = leggi_tabella(catalogo) or []
+                    except Exception:
+                        righe_cat = []
+                    for r in righe_cat:
+                        if not r.get("Articolo"):
+                            continue
+                        try:
+                            qta = float(str(r.get("Quantità", 0)).replace(",", "."))
+                        except ValueError:
+                            qta = 0.0
+                        soglia_grezza = r.get("soglia_minima")
+                        try:
+                            soglia = float(str(soglia_grezza).replace(",", ".")) if soglia_grezza not in (None, "") else SOGLIA_SOTTOSCORTA
+                        except ValueError:
+                            soglia = SOGLIA_SOTTOSCORTA
+                        if qta <= soglia:
+                            riga_copia = dict(r)
+                            riga_copia["Quantità"] = qta
+                            riga_copia["soglia_minima"] = soglia
+                            riga_copia["Articolo"] = f"[{catalogo}] {r.get('Articolo')}"
+                            righe_report.append(riga_copia)
+                titolo_report = "Report Sottoscorta — Tutti i Cataloghi"
+ 
+            else:  # Selezione personalizzata articoli
+                mappa_articoli_pdf = {f"{r['Articolo']} - {r.get('Descrizione', '')}": r for r in dati}
+                selezione = st.multiselect(
+                    "Seleziona gli articoli da includere nel report:",
+                    options=list(mappa_articoli_pdf.keys()),
+                    key="selezione_pdf",
+                )
+                righe_report = [mappa_articoli_pdf[s] for s in selezione]
+                titolo_report = f"Report Selezione Articoli — {NOME_TABELLA}"
+ 
+            if st.button("🖨️ Genera PDF", key="genera_pdf_btn", use_container_width=True):
+                if not righe_report:
+                    st.warning("Nessun articolo da includere nel report: controlla la selezione.")
+                else:
+                    buffer_pdf = genera_pdf_report(titolo_report, sottotitolo_report, righe_report)
+                    st.session_state.pdf_pronto = buffer_pdf.getvalue()
+                    st.session_state.pdf_nome_file = f"report_{NOME_TABELLA}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+ 
+            if st.session_state.get("pdf_pronto"):
+                st.download_button(
+                    "📥 Scarica Report PDF",
+                    data=st.session_state.pdf_pronto,
+                    file_name=st.session_state.pdf_nome_file,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_pdf_btn",
+                )
  
         if st.session_state.messaggio_successo:
             st.success(st.session_state.messaggio_successo)
