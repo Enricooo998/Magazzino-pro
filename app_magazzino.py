@@ -3,6 +3,7 @@ from supabase import create_client, Client
 import io
 import csv
 import traceback
+import pandas as pd
 
 # --- CONFIGURAZIONE DATABASE ---
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
@@ -136,6 +137,9 @@ with st.sidebar:
         nuova_descrizione = st.text_input("Descrizione")
         nuova_um = st.text_input("Unità di misura")
         nuova_quantita = st.number_input("Quantità Iniziale", min_value=0.0, value=0.0, step=1.0)
+        nuova_soglia = st.number_input(
+            "Soglia sottoscorta (avviso sotto questo valore)", min_value=0.0, value=SOGLIA_SOTTOSCORTA, step=1.0
+        )
         foto_caricata = st.file_uploader("Carica foto prodotto (Opzionale)", type=['png', 'jpg', 'jpeg'])
 
         if st.form_submit_button("Salva Nuovo Articolo"):
@@ -165,6 +169,7 @@ with st.sidebar:
                             "Descrizione": nuova_descrizione.strip(),
                             "Um": nuova_um.strip(),
                             "Quantità": nuova_quantita,
+                            "soglia_minima": nuova_soglia,
                             "immagine": url_foto,
                             "foto_path": percorso_foto,
                         }
@@ -175,9 +180,113 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"Errore durante il salvataggio: {e}")
 
+    st.markdown("---")
+
+    with st.expander(f"📤 Importa da CSV in {NOME_TABELLA}"):
+        st.caption("Il file deve avere le colonne: Articolo, Descrizione, Um, Quantità (Soglia opzionale).")
+        file_csv = st.file_uploader("Scegli file CSV", type=["csv"], key="import_csv")
+        if file_csv is not None:
+            try:
+                testo_csv = file_csv.getvalue().decode("utf-8-sig")
+                lettore = csv.DictReader(io.StringIO(testo_csv))
+                righe_csv = list(lettore)
+                colonne_richieste = {"Articolo"}
+                if not righe_csv or not colonne_richieste.issubset(set(lettore.fieldnames or [])):
+                    st.error("Il CSV deve contenere almeno la colonna 'Articolo'.")
+                else:
+                    st.write(f"Trovate **{len(righe_csv)}** righe nel file. Anteprima:")
+                    st.dataframe(righe_csv[:5], use_container_width=True)
+
+                    if st.button("✅ Conferma import", key="conferma_import_csv"):
+                        esistenti = {
+                            r["Articolo"] for r in supabase.table(NOME_TABELLA).select("Articolo").execute().data
+                        }
+                        da_inserire = []
+                        saltati = []
+                        for riga in righe_csv:
+                            nome_art = str(riga.get("Articolo", "")).strip()
+                            if not nome_art:
+                                continue
+                            if nome_art in esistenti:
+                                saltati.append(nome_art)
+                                continue
+                            try:
+                                qta = float(str(riga.get("Quantità", "0")).replace(",", "."))
+                            except ValueError:
+                                qta = 0.0
+                            try:
+                                soglia = float(str(riga.get("Soglia", SOGLIA_SOTTOSCORTA)).replace(",", "."))
+                            except ValueError:
+                                soglia = SOGLIA_SOTTOSCORTA
+                            da_inserire.append({
+                                "Articolo": nome_art,
+                                "Descrizione": str(riga.get("Descrizione", "")).strip(),
+                                "Um": str(riga.get("Um", "")).strip(),
+                                "Quantità": qta,
+                                "soglia_minima": soglia,
+                            })
+                            esistenti.add(nome_art)  # evita doppioni interni allo stesso file
+
+                        if da_inserire:
+                            supabase.table(NOME_TABELLA).insert(da_inserire).execute()
+                            invalida_cache()
+                        msg = f"✅ Importate {len(da_inserire)} righe."
+                        if saltati:
+                            msg += f" Saltate {len(saltati)} righe già esistenti (nomi duplicati)."
+                        st.session_state.messaggio_successo = msg
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Errore nella lettura del CSV: {e}")
+
 # ==========================================
-# 4. SCHERMATA PRINCIPALE
+# 4. DASHBOARD RIEPILOGATIVA (tutti i cataloghi)
 # ==========================================
+with st.expander("📊 Riepilogo generale su tutti i cataloghi", expanded=False):
+    dati_riepilogo = []
+    for catalogo in lista_cataloghi:
+        try:
+            righe_catalogo = leggi_tabella(catalogo)
+        except Exception:
+            righe_catalogo = []
+        righe_valide = [r for r in (righe_catalogo or []) if r.get("Articolo")]
+
+        n_sottoscorta = 0
+        qta_totale = 0.0
+        for r in righe_valide:
+            try:
+                qta = float(str(r.get("Quantità", 0)).replace(",", "."))
+            except ValueError:
+                qta = 0.0
+            try:
+                soglia = float(str(r.get("soglia_minima", SOGLIA_SOTTOSCORTA)).replace(",", ".")) if r.get("soglia_minima") not in (None, "") else SOGLIA_SOTTOSCORTA
+            except ValueError:
+                soglia = SOGLIA_SOTTOSCORTA
+            qta_totale += qta
+            if qta <= soglia:
+                n_sottoscorta += 1
+
+        dati_riepilogo.append({
+            "Catalogo": catalogo,
+            "N. articoli": len(righe_valide),
+            "Quantità totale": qta_totale,
+            "In sottoscorta": n_sottoscorta,
+        })
+
+    df_riepilogo = pd.DataFrame(dati_riepilogo).set_index("Catalogo")
+
+    col_r1, col_r2, col_r3 = st.columns(3)
+    col_r1.metric("Cataloghi totali", len(lista_cataloghi))
+    col_r2.metric("Articoli totali", int(df_riepilogo["N. articoli"].sum()))
+    col_r3.metric("Articoli in sottoscorta (tutti i cataloghi)", int(df_riepilogo["In sottoscorta"].sum()))
+
+    st.caption("Numero di articoli per catalogo")
+    st.bar_chart(df_riepilogo["N. articoli"])
+
+    st.caption("Quantità totale in giacenza per catalogo")
+    st.bar_chart(df_riepilogo["Quantità totale"])
+
+    st.dataframe(df_riepilogo, use_container_width=True)
+
 st.title(f"📦 Magazzino: {NOME_TABELLA}")
 
 try:
@@ -198,13 +307,26 @@ try:
                 except ValueError:
                     r["Quantità"] = 0.0
 
-        # --- ALLARME SOTTOSCORTA ---
-        sottoscorta = [riga for riga in dati if riga["Quantità"] <= SOGLIA_SOTTOSCORTA]
+        # --- ALLARME SOTTOSCORTA (soglia personalizzabile per articolo, con fallback a quella globale) ---
+        for r in dati:
+            soglia_grezza = r.get("soglia_minima")
+            try:
+                r["soglia_minima"] = float(str(soglia_grezza).replace(',', '.')) if soglia_grezza not in (None, "") else SOGLIA_SOTTOSCORTA
+            except ValueError:
+                r["soglia_minima"] = SOGLIA_SOTTOSCORTA
+
+        sottoscorta = [riga for riga in dati if riga["Quantità"] <= riga["soglia_minima"]]
         if sottoscorta:
             st.error(f"🚨 **ALLARME SOTTOSCORTA in {NOME_TABELLA}:** Ci sono {len(sottoscorta)} articoli in esaurimento!")
             with st.expander("👀 Clicca qui per vedere gli articoli in sottoscorta"):
                 for art in sottoscorta:
                     st.warning(f"⚠️ **{art['Articolo']}** - Quantità residua: **{art['Quantità']}**")
+
+        st.markdown("---")
+
+        with st.expander(f"📈 Grafico quantità in {NOME_TABELLA}"):
+            df_grafico = pd.DataFrame(dati)[["Articolo", "Quantità"]].set_index("Articolo")
+            st.bar_chart(df_grafico)
 
         st.markdown("---")
 
@@ -228,6 +350,7 @@ try:
                     "created_at": None,
                     "id": None,
                     "foto_path": None,
+                    "soglia_minima": None,
                 },
                 use_container_width=True
             )
@@ -361,6 +484,11 @@ try:
             with col_m1:
                 agg_desc = st.text_input("Correggi Descrizione:", value=str(dati_art.get("Descrizione", "")).replace("None", ""))
                 agg_um = st.text_input("Correggi Um:", value=str(dati_art.get("Um", "")).replace("None", ""))
+                try:
+                    soglia_corrente = float(str(dati_art.get("soglia_minima", SOGLIA_SOTTOSCORTA)).replace(",", ".")) if dati_art.get("soglia_minima") not in (None, "") else SOGLIA_SOTTOSCORTA
+                except ValueError:
+                    soglia_corrente = SOGLIA_SOTTOSCORTA
+                agg_soglia = st.number_input("Soglia sottoscorta:", min_value=0.0, value=soglia_corrente, step=1.0)
 
                 nuova_foto_mod = st.file_uploader("Aggiungi/Sostituisci Foto", type=['png', 'jpg', 'jpeg'], key="foto_mod")
 
@@ -368,6 +496,7 @@ try:
                     dati_da_aggiornare = {
                         "Descrizione": agg_desc,
                         "Um": agg_um,
+                        "soglia_minima": agg_soglia,
                     }
                     if nuova_foto_mod:
                         url_foto_nuova, percorso_nuovo = carica_foto_su_supabase(
