@@ -326,15 +326,18 @@ def genera_pdf_report(titolo, sottotitolo, righe, includi_soglia=True):
     ]))
     elementi.append(tabella)
  
-    doc.build(elementi)
+  doc.build(elementi)
     buffer.seek(0)
     return buffer
- 
- 
- 
+
+
+# --- INIZIALIZZAZIONE CORRETTA DELLO STATO ---
+if 'ultimo_articolo' not in st.session_state:
     st.session_state.ultimo_articolo = None
+
 if 'messaggio_successo' not in st.session_state:
     st.session_state.messaggio_successo = None
+
 if 'dati_annulla' not in st.session_state:
     st.session_state.dati_annulla = None
  
