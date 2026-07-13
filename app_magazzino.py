@@ -9,10 +9,93 @@ import pandas as pd
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CHIAVE_SUPABASE = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL_SUPABASE, CHIAVE_SUPABASE)
-st.set_page_config(page_title="Gestione Magazzino Pro", layout="wide")
+st.set_page_config(page_title="Gestione Magazzino Pro", layout="wide", page_icon="📦")
 
 BUCKET_FOTO = "foto-prodotti"
 SOGLIA_SOTTOSCORTA = 5.0
+
+# ==========================================
+# 0. TEMA VISIVO "MATERICO" (legni, laminati, superfici)
+# ==========================================
+COLORI_CATALOGO = {
+    "Prodotti": "#8C6A4E",              # cuoio / noce medio
+    "Krion": "#A9A297",                 # solid surface, grigio pietra caldo
+    "Adesivi": "#B8863B",               # resina ambrata
+    "LAMINATI&HPL": "#6E4B34",          # laminato noce scuro
+    "TRANCIATI NATURALI": "#C7A26B",    # tranciato rovere chiaro
+    "Duropal": "#4A4038",               # laminato grafite/carbone
+}
+
+CSS_TEMA = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+html, body, [class*="css"], .stMarkdown, .stTextInput, .stSelectbox, .stButton {
+    font-family: 'Inter', sans-serif;
+}
+h1, h2, h3, .stTitle {
+    font-family: 'Zilla Slab', serif !important;
+    letter-spacing: 0.2px;
+    color: #3A2E22 !important;
+}
+[data-testid="stAppViewContainer"] {
+    background-color: #E8DFCE;
+}
+[data-testid="stSidebar"] {
+    background-color: #DCCFB4;
+    border-right: 1px solid #B9A688;
+}
+[data-testid="stMetricValue"] {
+    font-family: 'IBM Plex Mono', monospace;
+    color: #3A2E22;
+}
+.stButton>button, .stDownloadButton>button {
+    background-color: #8C6A4E;
+    color: #F4EEE1;
+    border: 1px solid #6E4B34;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+}
+.stButton>button:hover, .stDownloadButton>button:hover {
+    background-color: #6E4B34;
+    border-color: #3A2E22;
+    color: #F4EEE1;
+}
+[data-testid="stDataFrame"] {
+    font-family: 'IBM Plex Mono', monospace;
+    border: 1px solid #B9A688;
+    border-radius: 4px;
+}
+div[data-testid="stExpander"] {
+    border: 1px solid #B9A688;
+    border-radius: 4px;
+    background-color: #DCCFB4;
+}
+hr {
+    border-top: 1px solid #B9A688;
+}
+.etichetta-campione {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #F4EEE1;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+    margin-left: 8px;
+}
+</style>
+"""
+st.markdown(CSS_TEMA, unsafe_allow_html=True)
+
+
+def etichetta_campione(nome_catalogo):
+    """Piccola 'etichetta campione' colorata, come nei campionari di materiali, per riconoscere il catalogo a colpo d'occhio."""
+    colore = COLORI_CATALOGO.get(nome_catalogo, "#8C6A4E")
+    return f'<span class="etichetta-campione" style="background-color:{colore};">{nome_catalogo.upper()}</span>'
 
 # ==========================================
 # 1. SISTEMA DI ACCESSO (LOGIN MULTI-UTENTE)
@@ -128,6 +211,7 @@ with st.sidebar:
     st.header("📂 Cambia Catalogo")
     lista_cataloghi = ["Prodotti", "Krion", "Adesivi", "LAMINATI&HPL", "TRANCIATI NATURALI", "Duropal"]
     NOME_TABELLA = st.selectbox("Seleziona il magazzino da gestire:", lista_cataloghi)
+    st.markdown(etichetta_campione(NOME_TABELLA), unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -287,7 +371,7 @@ with st.expander("📊 Riepilogo generale su tutti i cataloghi", expanded=False)
 
     st.dataframe(df_riepilogo, use_container_width=True)
 
-st.title(f"📦 Magazzino: {NOME_TABELLA}")
+st.markdown(f"# 📦 Magazzino: {NOME_TABELLA} {etichetta_campione(NOME_TABELLA)}", unsafe_allow_html=True)
 
 try:
     dati_grezzi = leggi_tabella(NOME_TABELLA)
