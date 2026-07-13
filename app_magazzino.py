@@ -326,7 +326,7 @@ def genera_pdf_report(titolo, sottotitolo, righe, includi_soglia=True):
     ]))
     elementi.append(tabella)
  
-  doc.build(elementi)
+    doc.build(elementi)
     buffer.seek(0)
     return buffer
 
