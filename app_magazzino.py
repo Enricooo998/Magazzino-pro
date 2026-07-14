@@ -949,8 +949,3 @@ try:
 except Exception as e:
     st.error(f"Impossibile caricare lo storico. Assicurati di aver creato la tabella 'Storico' su Supabase. Errore: {e}")
     print(traceback.format_exc())
-
-        st.info("Nessun movimento registrato finora.")
-except Exception as e:
-    st.error(f"Impossibile caricare lo storico. Assicurati di aver creato la tabella 'Storico' su Supabase. Errore: {e}")
-    print(traceback.format_exc())
