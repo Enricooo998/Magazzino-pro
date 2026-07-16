@@ -914,27 +914,34 @@ try:
                     try:
                         righe_ddt, avvisi_ddt = estrai_righe_da_ddt(file_ddt.getvalue())
                         righe_consolidate = consolida_righe_ddt(righe_ddt)
+                    except Exception as e:
+                        righe_consolidate = []
+                        avvisi_ddt = [f"Errore durante la lettura del PDF: {e}"]
 
-                        # Tentativo di match automatico intelligente contro il catalogo corrente
-                        mappa_catalogo_match = {
-                            r["Articolo"]: r["id"]
-                            for r in supabase.table(NOME_TABELLA).select("id, Articolo").execute().data
-                        }
-                        for r in righe_consolidate:
-                            match_trovato = trova_corrispondenza_codice(r["Codice_Articolo"], mappa_catalogo_match)
-                            if match_trovato:
-                                r["Codice_Articolo"] = match_trovato
-                                r["Trovato"] = "✅"
-                            else:
+                    # Tentativo di match automatico intelligente contro il catalogo corrente:
+                    # in un blocco SEPARATO, così se questo fallisce non perdiamo comunque
+                    # le righe già estratte correttamente dal PDF.
+                    if righe_consolidate:
+                        try:
+                            mappa_catalogo_match = {
+                                r["Articolo"]: r["id"]
+                                for r in supabase.table(NOME_TABELLA).select("id, Articolo").execute().data
+                            }
+                            for r in righe_consolidate:
+                                match_trovato = trova_corrispondenza_codice(r["Codice_Articolo"], mappa_catalogo_match)
+                                if match_trovato:
+                                    r["Codice_Articolo"] = match_trovato
+                                    r["Trovato"] = "✅"
+                                else:
+                                    r["Trovato"] = "❓"
+                        except Exception as e:
+                            avvisi_ddt.append(f"Match automatico non riuscito (le righe restano comunque modificabili a mano): {e}")
+                            for r in righe_consolidate:
                                 r["Trovato"] = "❓"
 
-                        st.session_state.ddt_righe = righe_consolidate
-                        st.session_state.ddt_avvisi = avvisi_ddt
-                        st.session_state.ddt_chiave_file = chiave_file
-                    except Exception as e:
-                        st.session_state.ddt_righe = []
-                        st.session_state.ddt_avvisi = [f"Errore durante la lettura del PDF: {e}"]
-                        st.session_state.ddt_chiave_file = chiave_file
+                    st.session_state.ddt_righe = righe_consolidate
+                    st.session_state.ddt_avvisi = avvisi_ddt
+                    st.session_state.ddt_chiave_file = chiave_file
 
                 if not st.session_state.get("ddt_righe"):
                     st.warning(
