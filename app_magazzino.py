@@ -369,6 +369,8 @@ def trova_corrispondenza_codice(codice_ddt, mappa_catalogo):
 
     candidati_suffisso = []
     for articolo_catalogo in mappa_catalogo:
+        if not articolo_catalogo:  # salta gli articoli senza nome (Articolo = NULL/vuoto)
+            continue
         art_norm = re.sub(r"[^A-Za-z0-9]", "", articolo_catalogo).upper()
         if art_norm == codice_norm:
             return articolo_catalogo
@@ -982,7 +984,8 @@ try:
                                 for r in st.session_state.ddt_righe:
                                     if r.get("Trovato") != "✅" and not r["Codice_Articolo"].startswith(prefisso_ddt):
                                         r["Codice_Articolo"] = prefisso_ddt + r["Codice_Articolo"]
-                                        r["Trovato"] = "✅" if r["Codice_Articolo"] in mappa_catalogo_match else "❓"
+                                    # ricalcolo comunque il Trovato, anche se il prefisso c'era già
+                                    r["Trovato"] = "✅" if r["Codice_Articolo"] in mappa_catalogo_match else "❓"
                                 st.rerun()
 
                     df_ddt = pd.DataFrame(st.session_state.ddt_righe)[["Trovato", "Codice_Articolo", "Descrizione", "Um", "Quantità"]]
