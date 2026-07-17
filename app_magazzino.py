@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import io
+import os
 import csv
 import re
 import traceback
@@ -173,19 +174,84 @@ if 'autenticato' not in st.session_state:
     st.session_state.utente_loggato = ""
 
 if not st.session_state.autenticato:
-    st.title("🔐 Accesso Magazzino")
-    st.info("Area riservata. Inserisci le tue credenziali.")
+    st.markdown("""
+    <style>
+    .login-swatch-strip {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        margin: 0.5rem 0 1.5rem 0;
+    }
+    .login-swatch-strip span {
+        width: 36px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+    }
+    .login-header { text-align: center; margin-bottom: 1.2rem; }
+    .login-icona {
+        width: 64px; height: 64px; line-height: 64px;
+        border-radius: 50%;
+        background-color: #8C6A4E;
+        color: #F4EEE1;
+        font-size: 1.8rem;
+        margin: 0 auto 0.8rem auto;
+        box-shadow: 0 2px 6px rgba(58,46,34,0.25);
+    }
+    .login-titolo {
+        font-family: 'Zilla Slab', serif !important;
+        color: #3A2E22;
+        font-size: 1.8rem;
+        margin-bottom: 0.2rem;
+    }
+    .login-sottotitolo {
+        color: #6E4B34;
+        font-size: 0.9rem;
+        margin-top: 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    utente_inserito = st.text_input("Nome Utente:")
-    password_inserita = st.text_input("Password:", type="password")
+    col_sx, col_centro, col_dx = st.columns([1, 1.3, 1])
+    with col_centro:
+        st.markdown(
+            '<div class="login-swatch-strip">'
+            + "".join(f'<span style="background-color:{c};"></span>' for c in COLORI_CATALOGO.values())
+            + '</div>',
+            unsafe_allow_html=True,
+        )
 
-    if st.button("Entra"):
-        if utente_inserito in st.secrets["utenti"] and st.secrets["utenti"][utente_inserito] == password_inserita:
-            st.session_state.autenticato = True
-            st.session_state.utente_loggato = utente_inserito
-            st.rerun()
+        percorso_logo = os.path.join(os.path.dirname(__file__), "assets", "logo_astra.png")
+        if os.path.exists(percorso_logo):
+            col_logo_sx, col_logo_centro, col_logo_dx = st.columns([1, 1.4, 1])
+            with col_logo_centro:
+                st.image(percorso_logo, use_container_width=True)
+            st.markdown(
+                '<div class="login-header">'
+                '<p class="login-sottotitolo">Area riservata — inserisci le tue credenziali</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
         else:
-            st.error("Nome utente o password errati. Riprova.")
+            st.markdown(
+                '<div class="login-header">'
+                '<div class="login-icona">📦</div>'
+                '<div class="login-titolo">Gestione Magazzino</div>'
+                '<p class="login-sottotitolo">Area riservata — inserisci le tue credenziali</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        utente_inserito = st.text_input("Nome Utente:", placeholder="Il tuo nome utente")
+        password_inserita = st.text_input("Password:", type="password", placeholder="La tua password")
+
+        if st.button("Entra", use_container_width=True):
+            if utente_inserito in st.secrets["utenti"] and st.secrets["utenti"][utente_inserito] == password_inserita:
+                st.session_state.autenticato = True
+                st.session_state.utente_loggato = utente_inserito
+                st.rerun()
+            else:
+                st.error("Nome utente o password errati. Riprova.")
     st.stop()
 
 # Pulsante di logout in sidebar (sempre visibile una volta loggati)
