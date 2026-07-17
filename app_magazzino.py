@@ -221,8 +221,14 @@ if not st.session_state.autenticato:
             unsafe_allow_html=True,
         )
 
-        percorso_logo = os.path.join(os.path.dirname(__file__), "assets", "logo_astra.png")
-        if os.path.exists(percorso_logo):
+        candidati_percorso_logo = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_astra.png"),
+            os.path.join(os.getcwd(), "assets", "logo_astra.png"),
+            "assets/logo_astra.png",
+        ]
+        percorso_logo = next((p for p in candidati_percorso_logo if os.path.exists(p)), None)
+
+        if percorso_logo:
             col_logo_sx, col_logo_centro, col_logo_dx = st.columns([1, 1.4, 1])
             with col_logo_centro:
                 st.image(percorso_logo, use_container_width=True)
@@ -241,6 +247,16 @@ if not st.session_state.autenticato:
                 '</div>',
                 unsafe_allow_html=True,
             )
+            with st.expander("🔧 Diagnostica logo (il file non è stato trovato)"):
+                st.caption("Percorsi controllati:")
+                for p in candidati_percorso_logo:
+                    st.code(p)
+                cartella_assets = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+                if os.path.isdir(cartella_assets):
+                    st.caption("Contenuto trovato nella cartella 'assets':")
+                    st.code("\n".join(os.listdir(cartella_assets)) or "(cartella vuota)")
+                else:
+                    st.caption("La cartella 'assets' non esiste in questa posizione.")
 
         utente_inserito = st.text_input("Nome Utente:", placeholder="Il tuo nome utente")
         password_inserita = st.text_input("Password:", type="password", placeholder="La tua password")
