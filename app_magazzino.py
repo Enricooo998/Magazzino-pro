@@ -35,6 +35,28 @@ COLORI_CATALOGO = {
     "Duropal": "#4A4038",               # laminato grafite/carbone
 }
 
+LOGO_CATALOGO = {
+    "Prodotti": "logo_prodotti.png",
+    "Krion": "logo_krion.png",
+    "Adesivi": "logo_adesivi.png",
+    "LAMINATI&HPL": "logo_laminati.png",
+    "TRANCIATI NATURALI": "logo_tranciati.png",
+    "Duropal": "logo_duropal.png",
+}
+
+
+def trova_percorso_asset(nome_file):
+    """Cerca un file nella cartella assets/ (o asset/, per compatibilità) accanto all'app."""
+    candidati = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", nome_file),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "asset", nome_file),
+        os.path.join(os.getcwd(), "assets", nome_file),
+        os.path.join(os.getcwd(), "asset", nome_file),
+        f"assets/{nome_file}",
+        f"asset/{nome_file}",
+    ]
+    return next((p for p in candidati if os.path.exists(p)), None)
+
 CSS_TEMA = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
@@ -221,12 +243,7 @@ if not st.session_state.autenticato:
             unsafe_allow_html=True,
         )
 
-        candidati_percorso_logo = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_astra.png"),
-            os.path.join(os.getcwd(), "assets", "logo_astra.png"),
-            "assets/logo_astra.png",
-        ]
-        percorso_logo = next((p for p in candidati_percorso_logo if os.path.exists(p)), None)
+        percorso_logo = trova_percorso_asset("logo_astra.png")
 
         if percorso_logo:
             col_logo_sx, col_logo_centro, col_logo_dx = st.columns([1, 1.4, 1])
@@ -248,15 +265,13 @@ if not st.session_state.autenticato:
                 unsafe_allow_html=True,
             )
             with st.expander("🔧 Diagnostica logo (il file non è stato trovato)"):
-                st.caption("Percorsi controllati:")
-                for p in candidati_percorso_logo:
-                    st.code(p)
+                st.caption("Cercato 'logo_astra.png' nelle cartelle 'assets/' e 'asset/' accanto all'app, senza trovarlo.")
                 cartella_assets = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
-                if os.path.isdir(cartella_assets):
-                    st.caption("Contenuto trovato nella cartella 'assets':")
-                    st.code("\n".join(os.listdir(cartella_assets)) or "(cartella vuota)")
-                else:
-                    st.caption("La cartella 'assets' non esiste in questa posizione.")
+                cartella_asset = os.path.join(os.path.dirname(os.path.abspath(__file__)), "asset")
+                for cartella in (cartella_assets, cartella_asset):
+                    if os.path.isdir(cartella):
+                        st.caption(f"Contenuto trovato in '{cartella}':")
+                        st.code("\n".join(os.listdir(cartella)) or "(cartella vuota)")
 
         utente_inserito = st.text_input("Nome Utente:", placeholder="Il tuo nome utente")
         password_inserita = st.text_input("Password:", type="password", placeholder="La tua password")
@@ -576,6 +591,10 @@ with st.sidebar:
     lista_cataloghi = ["Prodotti", "Krion", "Adesivi", "LAMINATI&HPL", "TRANCIATI NATURALI", "Duropal"]
     NOME_TABELLA = st.selectbox("Seleziona il magazzino da gestire:", lista_cataloghi)
     st.markdown(etichetta_campione(NOME_TABELLA), unsafe_allow_html=True)
+
+    percorso_logo_catalogo = trova_percorso_asset(LOGO_CATALOGO.get(NOME_TABELLA, ""))
+    if percorso_logo_catalogo:
+        st.image(percorso_logo_catalogo, use_container_width=True)
 
     st.markdown("---")
 
